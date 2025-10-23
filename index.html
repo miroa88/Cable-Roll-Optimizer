@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cable Roll Optimizer</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page__header">
+      <h1>Cable Roll Optimizer</h1>
+      <p class="page__tagline">Import. Optimize. Export. Keep leftovers minimal and crews happy.</p>
+    </header>
+
+    <section class="panel">
+      <h2>1. Load Cable Schedule</h2>
+      <div class="panel__grid">
+        <label class="panel__item">
+          <span>Excel file (.xlsx)</span>
+          <input type="file" id="file-input" accept=".xlsx,.xlsm">
+        </label>
+        <label class="panel__item">
+          <span>Standard roll length (ft)</span>
+          <input type="number" id="roll-length" min="1" value="1000">
+        </label>
+        <label class="panel__item">
+          <span>Max shortage tolerance (ft)</span>
+          <input type="number" id="tolerance" min="0" value="5">
+        </label>
+        <label class="panel__item">
+          <span>Max shortages allowed</span>
+          <input type="number" id="tolerance-limit" min="0" value="2">
+        </label>
+        <label class="panel__item">
+          <span>Optimization priority</span>
+          <select id="optimization-mode">
+            <option value="balanced">Balanced (Recommended)</option>
+            <option value="floor-strict">Floor Isolation (Minimize carrying rolls)</option>
+            <option value="waste-strict">Minimize Waste (Cost priority)</option>
+          </select>
+        </label>
+      </div>
+      <p class="panel__hint">Columns required: <code>Units</code>, <code>Cable size</code>, <code>Length(FT)</code>. Additional columns are ignored.</p>
+      <div style="margin-top: 12px; padding: 10px; background: #f0f9ff; border-radius: 6px; font-size: 0.9em;">
+        <strong>Optimization Modes:</strong>
+        <ul style="margin: 8px 0; padding-left: 20px;">
+          <li><strong>Balanced:</strong> Good mix of floor isolation and waste reduction</li>
+          <li><strong>Floor Isolation:</strong> Keep each roll on one floor (best for worker safety, may create more waste)</li>
+          <li><strong>Minimize Waste:</strong> Reduce leftover cable (may mix floors, best for budget-conscious projects)</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>2. Leftover Rolls</h2>
+      <form class="leftover-form" id="leftover-form">
+        <label>
+          <span>Cable size</span>
+          <input type="text" id="leftover-size" placeholder="e.g. 3#2+1#6">
+        </label>
+        <label>
+          <span>Usable length (ft)</span>
+          <input type="number" id="leftover-length" min="1" placeholder="e.g. 180">
+        </label>
+        <button type="submit">Add leftover roll</button>
+      </form>
+      <table class="table" id="leftover-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Cable size</th>
+            <th>Usable length (ft)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>3. Optimize Plan</h2>
+      <div class="actions">
+        <button id="optimize-btn" disabled>Run optimization</button>
+        <button id="export-btn" disabled>Download plan (.xlsx)</button>
+      </div>
+      <div class="status" id="status"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Cable Schedule Preview</h2>
+      <div id="file-info" style="display: none; margin-bottom: 1rem; padding: 1rem; background: #f0f9ff; border-left: 4px solid #0ea5e9; border-radius: 4px;">
+        <div style="display: grid; gap: 0.5rem;">
+          <div><strong>Cable Sizes Detected:</strong> <span id="info-cable-sizes">-</span></div>
+          <div><strong>Floors Detected:</strong> <span id="info-floors">-</span></div>
+          <div><strong>Total Units:</strong> <span id="info-total-units">-</span></div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table class="table" id="preview-table">
+          <thead>
+            <tr>
+              <th>Units</th>
+              <th>Floor</th>
+              <th>Cable size</th>
+              <th>Length (ft)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Optimization Results</h2>
+      <div class="summary" id="summary"></div>
+      <div class="table-wrapper">
+        <table class="table" id="results-table">
+          <thead>
+            <tr>
+              <th>Roll ID</th>
+              <th>Cable size</th>
+              <th>Source</th>
+              <th>Floor(s)</th>
+              <th>Units assigned</th>
+              <th>Total used (ft)</th>
+              <th>Leftover/Shortage (ft)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
