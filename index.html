@@ -18,10 +18,20 @@
     <section class="panel">
       <h2>1. Load Cable Schedule</h2>
       <div class="panel__grid">
-        <label class="panel__item">
+        <div class="panel__item panel__item--full file-upload">
           <span>Excel file (.xlsx)</span>
-          <input type="file" id="file-input" accept=".xlsx,.xlsm">
-        </label>
+          <div class="file-drop" id="file-drop-zone" role="button" tabindex="0" aria-label="Upload cable schedule Excel file">
+            <input type="file" id="file-input" accept=".xlsx,.xlsm" class="file-drop__input" tabindex="-1">
+            <div class="file-drop__content" aria-hidden="true">
+              <div class="file-drop__icon">📄</div>
+              <p class="file-drop__title">Drag &amp; drop your schedule</p>
+              <p class="file-drop__hint">or</p>
+              <button type="button" class="file-drop__button" id="file-browse-btn">Choose file</button>
+              <p class="file-drop__note">Supported: .xlsx, .xlsm</p>
+            </div>
+          </div>
+          <p class="file-drop__filename" id="file-name-display">No file selected yet.</p>
+        </div>
         <label class="panel__item">
           <span>Standard roll length (ft)</span>
           <input type="number" id="roll-length" min="1" value="1000">
@@ -35,23 +45,37 @@
           <input type="number" id="tolerance-limit" min="0" value="2">
         </label>
         <label class="panel__item">
-          <span>Optimization priority</span>
-          <select id="optimization-mode">
-            <option value="balanced">Balanced (Recommended)</option>
-            <option value="floor-strict">Floor Isolation (Minimize carrying rolls)</option>
-            <option value="waste-strict">Minimize Waste (Cost priority)</option>
-          </select>
+          <span>Spare threshold (ft)</span>
+          <input type="number" id="waste-threshold" min="1" value="30">
         </label>
+        <div class="panel__item panel__item--full">
+          <span>Optimization priority</span>
+          <div class="mode-toggle" id="optimization-mode" role="radiogroup" aria-label="Optimization priority">
+            <button type="button" class="mode-toggle__option is-active" data-mode="balanced" role="radio" aria-checked="true" tabindex="0">
+              <span class="mode-toggle__header">
+                <span class="mode-toggle__title">Balanced</span>
+                <span class="mode-toggle__badge">Recommended</span>
+              </span>
+              <span class="mode-toggle__description">Mix floor isolation with waste savings.</span>
+            </button>
+            <button type="button" class="mode-toggle__option" data-mode="floor-strict" role="radio" aria-checked="false" tabindex="-1">
+              <span class="mode-toggle__header">
+                <span class="mode-toggle__title">Floor Isolation</span>
+              </span>
+              <span class="mode-toggle__description">Keep rolls on a single floor to limit hauling.</span>
+            </button>
+            <button type="button" class="mode-toggle__option" data-mode="waste-strict" role="radio" aria-checked="false" tabindex="-1">
+              <span class="mode-toggle__header">
+                <span class="mode-toggle__title">Minimize Waste</span>
+              </span>
+              <span class="mode-toggle__description">Cut leftovers to a minimum even if floors mix.</span>
+            </button>
+          </div>
+          <p class="mode-toggle__note">Tap a mode to tailor the algorithm to your project.</p>
+        </div>
       </div>
       <p class="panel__hint">Columns required: <code>Units</code>, <code>Cable size</code>, <code>Length(FT)</code>. Additional columns are ignored.</p>
-      <div style="margin-top: 12px; padding: 10px; background: #f0f9ff; border-radius: 6px; font-size: 0.9em;">
-        <strong>Optimization Modes:</strong>
-        <ul style="margin: 8px 0; padding-left: 20px;">
-          <li><strong>Balanced:</strong> Good mix of floor isolation and waste reduction</li>
-          <li><strong>Floor Isolation:</strong> Keep each roll on one floor (best for worker safety, may create more waste)</li>
-          <li><strong>Minimize Waste:</strong> Reduce leftover cable (may mix floors, best for budget-conscious projects)</li>
-        </ul>
-      </div>
+      <button type="button" id="download-template-btn" class="download-template-btn">Download template (.xlsx)</button>
     </section>
 
     <section class="panel">

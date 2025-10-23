@@ -39,22 +39,109 @@
   const rollLengthInput = document.getElementById('roll-length');
   const toleranceInput = document.getElementById('tolerance');
   const toleranceLimitInput = document.getElementById('tolerance-limit');
-  const optimizationModeInput = document.getElementById('optimization-mode');
+  const wasteThresholdInput = document.getElementById('waste-threshold');
+  const optimizationModeControl = document.getElementById('optimization-mode');
   const previewTableBody = document.querySelector('#preview-table tbody');
   const optimizeButton = document.getElementById('optimize-btn');
   const exportButton = document.getElementById('export-btn');
   const statusEl = document.getElementById('status');
   const summaryEl = document.getElementById('summary');
   const resultsTableBody = document.querySelector('#results-table tbody');
+  const downloadTemplateButton = document.getElementById('download-template-btn');
+  const fileDropZone = document.getElementById('file-drop-zone');
+  const fileBrowseButton = document.getElementById('file-browse-btn');
+  const fileNameDisplay = document.getElementById('file-name-display');
   const leftoverForm = document.getElementById('leftover-form');
   const leftoverTableBody = document.querySelector('#leftover-table tbody');
   const fileInfoPanel = document.getElementById('file-info');
   const infoCableSizes = document.getElementById('info-cable-sizes');
   const infoFloors = document.getElementById('info-floors');
   const infoTotalUnits = document.getElementById('info-total-units');
+  let selectedOptimizationMode = 'balanced';
+
+  if (optimizationModeControl) {
+    const modeButtons = Array.from(optimizationModeControl.querySelectorAll('.mode-toggle__option'));
+    if (modeButtons.length) {
+      const activateButton = (button) => {
+        if (!button) return;
+        const mode = button.dataset.mode;
+        if (!mode) return;
+        selectedOptimizationMode = mode;
+        modeButtons.forEach((btn) => {
+          const isActive = btn === button;
+          btn.classList.toggle('is-active', isActive);
+          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+          btn.setAttribute('tabindex', isActive ? '0' : '-1');
+        });
+      };
+
+      const initialButton =
+        modeButtons.find((btn) => btn.classList.contains('is-active')) || modeButtons[0];
+      activateButton(initialButton);
+
+      optimizationModeControl.addEventListener('click', (event) => {
+        const option = event.target.closest('.mode-toggle__option');
+        if (!option || !optimizationModeControl.contains(option)) return;
+        activateButton(option);
+      });
+
+      optimizationModeControl.addEventListener('keydown', (event) => {
+        if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) {
+          return;
+        }
+        event.preventDefault();
+        const currentIndex = modeButtons.findIndex(
+          (btn) => btn.getAttribute('aria-checked') === 'true'
+        );
+        if (currentIndex === -1) return;
+
+        let nextIndex = currentIndex;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+          nextIndex = (currentIndex + 1) % modeButtons.length;
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+          nextIndex = (currentIndex - 1 + modeButtons.length) % modeButtons.length;
+        }
+
+        const nextButton = modeButtons[nextIndex];
+        activateButton(nextButton);
+        nextButton.focus();
+      });
+    }
+  }
+
+  if (downloadTemplateButton) {
+    downloadTemplateButton.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.href = 'template.xlsx';
+      link.download = 'cable-schedule-template.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  }
 
   function formatNumber(value) {
     return numberFormatter.format(Math.round(value * 100) / 100);
+  }
+
+  function getWasteThreshold() {
+    const fallback = 30;
+    if (!wasteThresholdInput) return fallback;
+    const value = parseFloat(wasteThresholdInput.value);
+    if (!Number.isFinite(value) || value <= 0) {
+      wasteThresholdInput.value = fallback;
+      return fallback;
+    }
+    return value;
+  }
+
+  function updateFileNameDisplay(name) {
+    if (!fileNameDisplay) return;
+    if (name) {
+      fileNameDisplay.textContent = `Selected: ${name}`;
+    } else {
+      fileNameDisplay.textContent = 'No file selected yet.';
+    }
   }
 
   function setStatus(message, type = null) {
@@ -114,6 +201,14 @@
     return unitStr;
   }
 
+  function isValidSpreadsheet(file) {
+    if (!file) return false;
+    const name = file.name ?? '';
+    if (/\.(xlsx|xlsm)$/i.test(name)) return true;
+    if (file.type && file.type.includes('sheet')) return true;
+    return false;
+  }
+
   function renderPreview() {
     if (!state.rows.length) {
       previewTableBody.innerHTML = '<tr><td colspan="4">Upload an Excel file to see a preview.</td></tr>';
@@ -132,10 +227,15 @@
       .join('');
   }
 
-  async function handleFileLoad(event) {
-    const file = event.target.files?.[0];
+  async function loadWorkbookFile(file) {
     if (!file) return;
+    if (!isValidSpreadsheet(file)) {
+      setStatus('Upload an Excel workbook (.xlsx or .xlsm).', 'warning');
+      updateFileNameDisplay(null);
+      return;
+    }
 
+    updateFileNameDisplay(file.name);
     setStatus('Reading workbook...');
     try {
       const data = await file.arrayBuffer();
@@ -338,6 +438,89 @@
     }
   }
 
+  async function handleFileLoad(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await loadWorkbookFile(file);
+    event.target.value = '';
+  }
+
+  function initializeFileInputUI() {
+    if (fileBrowseButton && fileInput) {
+      fileBrowseButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        fileInput.click();
+      });
+    }
+
+    if (!fileDropZone) return;
+
+    let dragDepth = 0;
+
+    const preventDragDefaults = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    fileDropZone.addEventListener('dragenter', (event) => {
+      preventDragDefaults(event);
+      dragDepth += 1;
+      fileDropZone.classList.add('is-dragover');
+    });
+
+    fileDropZone.addEventListener('dragover', (event) => {
+      preventDragDefaults(event);
+    });
+
+    fileDropZone.addEventListener('dragleave', (event) => {
+      preventDragDefaults(event);
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) {
+        fileDropZone.classList.remove('is-dragover');
+      }
+    });
+
+    fileDropZone.addEventListener('drop', async (event) => {
+      preventDragDefaults(event);
+      dragDepth = 0;
+      fileDropZone.classList.remove('is-dragover');
+
+      const files = event.dataTransfer?.files;
+      if (!files || !files.length) return;
+      const file = files[0];
+
+      if (!isValidSpreadsheet(file)) {
+        setStatus('Upload an Excel workbook (.xlsx or .xlsm).', 'warning');
+        updateFileNameDisplay(null);
+        return;
+      }
+
+      if (fileInput && typeof DataTransfer !== 'undefined') {
+        try {
+          const transfer = new DataTransfer();
+          transfer.items.add(file);
+          fileInput.files = transfer.files;
+        } catch (error) {
+          console.warn('Unable to sync file input from drop event:', error);
+        }
+      }
+
+      await loadWorkbookFile(file);
+    });
+
+    fileDropZone.addEventListener('click', (event) => {
+      if (event.target.closest('button')) return;
+      fileInput?.click();
+    });
+
+    fileDropZone.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        fileInput?.click();
+      }
+    });
+  }
+
   function renderLeftovers() {
     if (!state.leftovers.length) {
       leftoverTableBody.innerHTML = '<tr><td colspan="4">No leftover rolls added.</td></tr>';
@@ -403,6 +586,21 @@
       ? '<span class="badge" style="background: #10b981; color: white;">✓ Perfect floor isolation</span>'
       : `<span class="badge" style="background: #f59e0b; color: white;">⚠ ${mixedFloorRolls} roll(s) span multiple floors</span>`;
 
+    // Calculate waste vs spare/reusable breakdown
+    const wasteThreshold = getWasteThreshold(); // user-defined threshold for waste vs spare
+    let totalWaste = 0;
+    let totalSpare = 0;
+
+    state.assignments.forEach((roll) => {
+      if (roll.remaining > 0) {
+        if (roll.remaining < wasteThreshold) {
+          totalWaste += roll.remaining;
+        } else {
+          totalSpare += roll.remaining;
+        }
+      }
+    });
+
     const cards = [
       `<div class="summary__card">
         <p class="summary__title">Total cable requested</p>
@@ -418,9 +616,14 @@
         <p class="summary__note">${metrics.newRolls} new · ${metrics.leftoverRollsUsed} leftover</p>
       </div>`,
       `<div class="summary__card">
-        <p class="summary__title">Waste / Leftover</p>
-        <p class="summary__value">${formatNumber(metrics.totalLeftover)} ft</p>
-        <p class="summary__note">${shortageBadge}</p>
+        <p class="summary__title">True Waste</p>
+        <p class="summary__value">${formatNumber(totalWaste)} ft</p>
+        <p class="summary__note">Scrap/trash (&lt; ${formatNumber(wasteThreshold)} ft)</p>
+      </div>`,
+      `<div class="summary__card">
+        <p class="summary__title">Spare/Reusable</p>
+        <p class="summary__value">${formatNumber(totalSpare)} ft</p>
+        <p class="summary__note">Save for next project (≥ ${formatNumber(wasteThreshold)} ft)</p>
       </div>`,
       `<div class="summary__card">
         <p class="summary__title">Floor Isolation</p>
@@ -431,11 +634,29 @@
 
     const perCable = metrics.perCable
       .map(
-        (item) => `<li>
-          <strong>${item.cableSize}</strong> · ${item.unitsCount} unit(s) · ${item.rolls} roll(s) (${item.newRolls} new, ${item.leftoverRollsUsed} leftover) · leftover ${formatNumber(
-            item.totalLeftover
-          )} ft${item.totalShortage > 0 ? ` · short ${formatNumber(item.totalShortage)} ft` : ''}
-        </li>`
+        (item) => {
+          // Calculate waste vs spare for this cable size
+          let cableWaste = 0;
+          let cableSpare = 0;
+
+          state.assignments
+            .filter((roll) => roll.cableSize === item.cableSize)
+            .forEach((roll) => {
+              if (roll.remaining > 0) {
+                if (roll.remaining < wasteThreshold) {
+                  cableWaste += roll.remaining;
+                } else {
+                  cableSpare += roll.remaining;
+                }
+              }
+            });
+
+          return `<li>
+            <strong>${item.cableSize}</strong> · ${item.unitsCount} unit(s) · ${item.rolls} roll(s) (${item.newRolls} new, ${item.leftoverRollsUsed} leftover)${
+              item.totalShortage > 0 ? ` · <span class="danger">short ${formatNumber(item.totalShortage)} ft</span>` : ''
+            }
+          </li>`;
+        }
       )
       .join('');
 
@@ -444,7 +665,52 @@
       <ul class="summary__list">${perCable || '<li>No cable data.</li>'}</ul>
     </div>`;
 
-    summaryEl.innerHTML = cards.join('') + cableCard;
+    // Build waste/spare breakdown by cable size
+    const wasteBreakdown = metrics.perCable
+      .map(item => {
+        let cableWaste = 0;
+        let cableSpare = 0;
+        let wasteRolls = [];
+        let spareRolls = [];
+
+        state.assignments
+          .filter(roll => roll.cableSize === item.cableSize)
+          .forEach((roll) => {
+            if (roll.remaining > 0) {
+              if (roll.remaining < wasteThreshold) {
+                cableWaste += roll.remaining;
+                wasteRolls.push(`${roll.id}: ${formatNumber(roll.remaining)}ft`);
+              } else {
+                cableSpare += roll.remaining;
+                spareRolls.push(`${roll.id}: ${formatNumber(roll.remaining)}ft`);
+              }
+            }
+          });
+
+        let details = [];
+        if (cableWaste > 0) {
+          details.push(`<span class="danger">Waste: ${formatNumber(cableWaste)} ft (${wasteRolls.join(', ')})</span>`);
+        }
+        if (cableSpare > 0) {
+          details.push(`<span style="color: #10b981; font-weight: 500;">Spare: ${formatNumber(cableSpare)} ft (${spareRolls.join(', ')})</span>`);
+        }
+        if (details.length === 0) {
+          details.push('<span style="color: #6b7280;">No leftover</span>');
+        }
+
+        return `<li><strong>${item.cableSize}</strong> · ${details.join(' · ')}</li>`;
+      })
+      .join('');
+
+    const wasteCard = `<div class="summary__card summary__card--wide">
+      <p class="summary__title">Waste & Spare Breakdown by Cable Size</p>
+      <ul class="summary__list">${wasteBreakdown || '<li>No data.</li>'}</ul>
+      <p style="margin-top: 12px; font-size: 0.85em; color: #6b7280;">
+        <strong>Note:</strong> Waste (&lt; ${formatNumber(wasteThreshold)} ft) = trash/scrap. Spare (≥ ${formatNumber(wasteThreshold)} ft) = save for next project.
+      </p>
+    </div>`;
+
+    summaryEl.innerHTML = cards.join('') + cableCard + wasteCard;
   }
 
   function renderResultsTable(rolls) {
@@ -452,6 +718,8 @@
       resultsTableBody.innerHTML = '<tr><td colspan="7">Run optimization to see roll assignments.</td></tr>';
       return;
     }
+
+    const wasteThreshold = getWasteThreshold(); // user-defined threshold for waste vs spare
 
     resultsTableBody.innerHTML = rolls
       .map((roll) => {
@@ -469,10 +737,18 @@
           : '';
 
         const sourceLabel = roll.source === 'new' ? 'New roll' : 'Leftover roll';
-        const leftoverLabel =
-          roll.shortage > 0
-            ? `<span class="danger">Short ${formatNumber(roll.shortage)} ft</span>`
-            : `${formatNumber(roll.remaining)} ft`;
+
+        // Enhanced leftover label with waste/spare distinction
+        let leftoverLabel;
+        if (roll.shortage > 0) {
+          leftoverLabel = `<span class="danger">Short ${formatNumber(roll.shortage)} ft</span>`;
+        } else if (roll.remaining >= wasteThreshold) {
+          leftoverLabel = `<span style="color: #10b981; font-weight: 500;">${formatNumber(roll.remaining)} ft (spare)</span>`;
+        } else if (roll.remaining > 0) {
+          leftoverLabel = `<span class="danger">${formatNumber(roll.remaining)} ft (waste)</span>`;
+        } else {
+          leftoverLabel = `<span style="color: #6b7280;">0 ft</span>`;
+        }
 
         const rowClass = roll.shortage > 0 ? ' class="shortage-row"' : (isMixedFloor ? ' class="mixed-floor-row"' : '');
         return `<tr${rowClass}>
@@ -498,7 +774,8 @@
     const tolerance = Math.max(0, parseFloat(toleranceInput.value));
     const toleranceLimitRaw = parseInt(toleranceLimitInput.value, 10);
     const toleranceLimit = Number.isNaN(toleranceLimitRaw) ? 0 : Math.max(0, toleranceLimitRaw);
-    const optimizationMode = optimizationModeInput.value;
+    const optimizationMode = selectedOptimizationMode;
+    const wasteThreshold = getWasteThreshold();
 
     if (Number.isNaN(rollLength) || rollLength <= 0) {
       setStatus('Roll length must be a positive number.', 'warning');
@@ -532,6 +809,7 @@
       state.metrics = result.metrics;
       state.meta.toleranceUses = result.toleranceUsed;
       state.meta.algorithmUsed = result.algorithmUsed;
+      state.meta.wasteThreshold = wasteThreshold;
 
       renderSummary(result.metrics);
       renderResultsTable(result.assignments);
@@ -1811,11 +2089,23 @@
     return { rolls: usedRolls, stats };
   }
 
-  fileInput.addEventListener('change', handleFileLoad);
-  leftoverForm.addEventListener('submit', handleLeftoverSubmit);
-  leftoverTableBody.addEventListener('click', handleLeftoverClick);
-  optimizeButton.addEventListener('click', handleOptimize);
-  exportButton.addEventListener('click', handleExport);
+  initializeFileInputUI();
+
+  if (fileInput) {
+    fileInput.addEventListener('change', handleFileLoad);
+  }
+  if (leftoverForm) {
+    leftoverForm.addEventListener('submit', handleLeftoverSubmit);
+  }
+  if (leftoverTableBody) {
+    leftoverTableBody.addEventListener('click', handleLeftoverClick);
+  }
+  if (optimizeButton) {
+    optimizeButton.addEventListener('click', handleOptimize);
+  }
+  if (exportButton) {
+    exportButton.addEventListener('click', handleExport);
+  }
 
   renderLeftovers();
 })();
