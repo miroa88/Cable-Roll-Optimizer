@@ -44,6 +44,7 @@
   const previewTableBody = document.querySelector('#preview-table tbody');
   const optimizeButton = document.getElementById('optimize-btn');
   const exportButton = document.getElementById('export-btn');
+  const printResultsButton = document.getElementById('print-results-btn');
   const statusEl = document.getElementById('status');
   const summaryEl = document.getElementById('summary');
   const resultsTableBody = document.querySelector('#results-table tbody');
@@ -161,6 +162,7 @@
     summaryEl.innerHTML = '';
     resultsTableBody.innerHTML = '';
     exportButton.disabled = true;
+    printResultsButton.disabled = true;
   }
 
   function toFloor(unit) {
@@ -814,6 +816,7 @@
       renderSummary(result.metrics);
       renderResultsTable(result.assignments);
       exportButton.disabled = false;
+      printResultsButton.disabled = false;
 
       const modeLabel = {
         'floor-strict': 'Floor Isolation mode',
@@ -2105,6 +2108,17 @@
   }
   if (exportButton) {
     exportButton.addEventListener('click', handleExport);
+  }
+  if (printResultsButton) {
+    printResultsButton.addEventListener('click', handlePrintResults);
+  }
+
+  function handlePrintResults() {
+    if (!state.assignments.length) {
+      setStatus('Run the optimization before printing.', 'warning');
+      return;
+    }
+    window.print();
   }
 
   renderLeftovers();
