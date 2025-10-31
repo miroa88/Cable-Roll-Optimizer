@@ -1014,15 +1014,23 @@
       ? options.toleranceLimit
       : 0;
 
-    // Run multiple algorithms and compare results
-    const algorithms = [
-      { name: 'Floor Dedicated (Strict)', fn: optimizeFloorDedicatedStrict },
-      { name: 'Floor-First Greedy', fn: optimizeFloorFirstGreedy },
-      { name: 'Best Fit Decreasing', fn: optimizeBestFitDecreasing },
-      { name: 'First Fit Decreasing', fn: optimizeFirstFitDecreasing },
-      { name: 'Dynamic Programming', fn: optimizeDynamicProgramming },
-      { name: 'Genetic Algorithm', fn: optimizeGeneticAlgorithm },
-    ];
+    // In floor-strict mode, ONLY use Floor Dedicated algorithm (no comparison)
+    let algorithms;
+    if (options.optimizationMode === 'floor-strict') {
+      algorithms = [
+        { name: 'Floor Dedicated (Strict)', fn: optimizeFloorDedicatedStrict },
+      ];
+    } else {
+      // Run multiple algorithms and compare results
+      algorithms = [
+        { name: 'Floor Dedicated (Strict)', fn: optimizeFloorDedicatedStrict },
+        { name: 'Floor-First Greedy', fn: optimizeFloorFirstGreedy },
+        { name: 'Best Fit Decreasing', fn: optimizeBestFitDecreasing },
+        { name: 'First Fit Decreasing', fn: optimizeFirstFitDecreasing },
+        { name: 'Dynamic Programming', fn: optimizeDynamicProgramming },
+        { name: 'Genetic Algorithm', fn: optimizeGeneticAlgorithm },
+      ];
+    }
 
     const results = algorithms.map((algo) => {
       const meta = {
@@ -1151,7 +1159,17 @@
     console.log(`Winner: ${best.algorithmName}`);
 
     // POST-OPTIMIZATION: Consolidate leftovers - replace small new rolls with large leftovers
-    const optimized = consolidateLeftovers(best.assignments, options);
+    // Skip consolidation in floor-strict mode to maintain perfect floor isolation
+    let optimized;
+    if (options.optimizationMode === 'floor-strict') {
+      // In floor-strict mode, skip consolidation to preserve floor isolation
+      optimized = {
+        assignments: best.assignments,
+        metrics: best.metrics,
+      };
+    } else {
+      optimized = consolidateLeftovers(best.assignments);
+    }
 
     return {
       assignments: optimized.assignments,
