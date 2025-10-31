@@ -1314,26 +1314,31 @@
 
     const allRolls = [];
 
+    // Create leftover rolls ONCE and share them across all floors
+    const sharedLeftoverRolls = [];
+    leftoverEntries.forEach((entry) => {
+      const roll = createRoll(nextRollId('leftover'), cableSize, entry.length, 'leftover');
+      sharedLeftoverRolls.push(roll);
+      allRolls.push(roll);
+    });
+
     // Process each floor completely independently
     floors.forEach((floorItem) => {
-      const floorRolls = [];
-
-      // First, try to use leftover rolls for this floor only
-      leftoverEntries.forEach((entry) => {
-        const roll = createRoll(nextRollId('leftover'), cableSize, entry.length, 'leftover');
-        floorRolls.push(roll);
-      });
+      // Get floor-specific rolls for this floor only
+      const floorSpecificRolls = allRolls.filter(roll =>
+        roll.source === 'new' &&
+        roll.floors.size === 1 &&
+        roll.floors.has(floorItem.floor)
+      );
 
       // Process units on this floor
       floorItem.units.forEach((unit) => {
-        // Try to fit in existing floor-dedicated rolls (same floor only)
         let placed = false;
-
-        // Best Fit: Find roll with minimum waste that can fit this unit
         let bestRoll = null;
         let bestWaste = Infinity;
 
-        for (const roll of floorRolls) {
+        // Priority 1: Try floor-specific new rolls (same floor only)
+        for (const roll of floorSpecificRolls) {
           if (roll.shortage === 0 && roll.remaining >= unit.length) {
             const waste = roll.remaining - unit.length;
             if (waste < bestWaste) {
@@ -1348,9 +1353,31 @@
           placed = true;
         }
 
-        // Try tolerance on existing rolls (same floor only)
+        // Priority 2: Try shared leftover rolls that can fit this unit
+        if (!placed) {
+          bestWaste = Infinity;
+          bestRoll = null;
+
+          for (const roll of sharedLeftoverRolls) {
+            if (roll.shortage === 0 && roll.remaining >= unit.length) {
+              const waste = roll.remaining - unit.length;
+              if (waste < bestWaste) {
+                bestWaste = waste;
+                bestRoll = roll;
+              }
+            }
+          }
+
+          if (bestRoll) {
+            commitUnit(bestRoll, unit, 0, meta);
+            placed = true;
+          }
+        }
+
+        // Priority 3: Try tolerance on existing rolls
         if (!placed && tolerance > 0 && meta.toleranceUsed < meta.toleranceLimit) {
-          for (const roll of floorRolls) {
+          // Try floor-specific rolls first
+          for (const roll of floorSpecificRolls) {
             if (roll.shortage === 0 && roll.remaining > 0) {
               const shortage = unit.length - roll.remaining;
               if (shortage > 0 && shortage <= tolerance) {
@@ -1360,32 +1387,45 @@
               }
             }
           }
+
+          // Then try leftover rolls
+          if (!placed) {
+            for (const roll of sharedLeftoverRolls) {
+              if (roll.shortage === 0 && roll.remaining > 0) {
+                const shortage = unit.length - roll.remaining;
+                if (shortage > 0 && shortage <= tolerance) {
+                  commitUnit(roll, unit, shortage, meta);
+                  placed = true;
+                  break;
+                }
+              }
+            }
+          }
         }
 
-        // Create new roll dedicated to this floor
+        // Priority 4: Create new roll dedicated to this floor
         if (!placed) {
           const newRoll = createRoll(nextRollId('new'), cableSize, rollLength, 'new');
-          floorRolls.push(newRoll);
+          allRolls.push(newRoll);
           commitUnit(newRoll, unit, 0, meta);
         }
       });
-
-      // Add floor rolls to all rolls
-      allRolls.push(...floorRolls.filter(roll => roll.assignments.length > 0));
     });
 
-    const usedRolls = allRolls.map((roll) => ({
-      id: roll.id,
-      cableSize: roll.cableSize,
-      source: roll.source,
-      capacity: roll.capacity,
-      remaining: Math.max(0, roll.remaining),
-      shortage: roll.shortage,
-      assignments: roll.assignments.map((assignment) => ({ ...assignment })),
-      floors: Array.from(roll.floors),
-      totalRequested: roll.totalRequested,
-      totalActual: roll.totalActual,
-    }));
+    const usedRolls = allRolls
+      .filter((roll) => roll.assignments.length > 0)
+      .map((roll) => ({
+        id: roll.id,
+        cableSize: roll.cableSize,
+        source: roll.source,
+        capacity: roll.capacity,
+        remaining: Math.max(0, roll.remaining),
+        shortage: roll.shortage,
+        assignments: roll.assignments.map((assignment) => ({ ...assignment })),
+        floors: Array.from(roll.floors),
+        totalRequested: roll.totalRequested,
+        totalActual: roll.totalActual,
+      }));
 
     const stats = {
       cableSize,
