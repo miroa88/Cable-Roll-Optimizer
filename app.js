@@ -1342,12 +1342,8 @@
 
     // Process each floor completely independently
     floors.forEach((floorItem) => {
-      // Get floor-specific rolls for this floor only
-      const floorSpecificRolls = allRolls.filter(roll =>
-        roll.source === 'new' &&
-        roll.floors.size === 1 &&
-        roll.floors.has(floorItem.floor)
-      );
+      // Create a dedicated list of rolls for THIS floor (will grow as we add new rolls)
+      const floorSpecificRolls = [];
 
       // Process units on this floor
       floorItem.units.forEach((unit) => {
@@ -1355,7 +1351,7 @@
         let bestRoll = null;
         let bestWaste = Infinity;
 
-        // Priority 1: Try floor-specific new rolls (same floor only)
+        // Priority 1: Try existing floor-specific rolls (same floor only) - Best Fit
         for (const roll of floorSpecificRolls) {
           if (roll.shortage === 0 && roll.remaining >= unit.length) {
             const waste = roll.remaining - unit.length;
@@ -1424,7 +1420,8 @@
         // Priority 4: Create new roll dedicated to this floor
         if (!placed) {
           const newRoll = createRoll(nextRollId('new'), cableSize, rollLength, 'new');
-          allRolls.push(newRoll);
+          floorSpecificRolls.push(newRoll);  // Add to floor-specific list!
+          allRolls.push(newRoll);             // Add to master list
           commitUnit(newRoll, unit, 0, meta);
         }
       });
